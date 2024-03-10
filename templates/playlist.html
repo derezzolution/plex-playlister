@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+    <title>{{.Title}}</title>
+
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+
+<body>
+    <h1>{{.Title}}</h1>
+
+    {{range $i, $t := .Tracks}}
+    <div>
+        <img src="/playlist/{{$.RatingKey}}/{{$i}}/thumb" width="50" />
+        <ul>
+            {{with $t.Metadata.GrandparentTitle}}
+            <li>{{.}}</li>
+            {{end}}
+
+            {{with formatEpisodeCode $t.Metadata}}
+            <li>{{.}}</li>
+            {{end}}
+
+            {{with $t.Metadata.Title}}
+            <li>{{.}}</li>
+            {{end}}
+
+            {{with formatEpisodeCode $t.Metadata}}
+            <li>{{.}}</li>
+            {{end}}
+
+            {{with formatImdbUrl $t.MediaMetadata}}
+            <li><a href="{{.}}">IMDB</a></li>
+            {{end}}
+        </ul>
+    </div>
+    {{end}}
+
+    <footer>Copyright &copy; 2024 <a href="https://derezz.com">derezz.com</a></footer>
+
+</body>
+
+</html>

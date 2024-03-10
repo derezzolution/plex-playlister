@@ -1,0 +1,8 @@
+{
+    "plexServerUrl": "http://localhost:32400",
+    "plexToken": "YourTokenGoesHere",
+    "plexRatingKeys": [
+        1001
+    ],
+    "port": 8080
+}
