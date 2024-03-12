@@ -7,38 +7,32 @@
 
     <title>{{.Title}}</title>
 
-    <link rel="stylesheet" href="/static/style.css" />
+    <link rel="stylesheet" href="../static/style.css" />
 </head>
 
 <body>
-    <h1>{{.Title}}</h1>
+    <main>
+        <h1>{{.Title}}</h1>
 
-    {{range $i, $t := .Tracks}}
-    <div>
-        <img src="/playlist/{{$.RatingKey}}/{{$i}}/thumb" width="50" />
-        <ul>
-            {{with $t.Metadata.GrandparentTitle}}
-            <li>{{.}}</li>
-            {{end}}
+        {{range $i, $t := .Tracks}}
 
-            {{with formatEpisodeCode $t.Metadata}}
-            <li>{{.}}</li>
-            {{end}}
-
-            {{with $t.Metadata.Title}}
-            <li>{{.}}</li>
-            {{end}}
-
-            {{with formatEpisodeCode $t.Metadata}}
-            <li>{{.}}</li>
-            {{end}}
-
+        {{with formatImdbUrl $t.MediaMetadata}}<a href="{{.}}" target="_blank">{{end}}
+            <div class="track">
+                <div class="index">{{increment $i}}.</div>
+                <img src="{{$.RatingKey}}/{{$i}}/thumb" />
+                <div class="title">
+                    {{with $t.Metadata.GrandparentTitle}}{{.}}{{end}}
+                    {{if and $t.Metadata.GrandparentTitle (formatEpisodeCode $t.Metadata)}} - {{end}}
+                    {{with formatEpisodeCode $t.Metadata}}{{.}}{{end}}
+                    {{if and (formatEpisodeCode $t.Metadata) $t.Metadata.Title}} - {{end}}
+                    {{with $t.Metadata.Title}}{{.}}{{end}}
+                </div>
+            </div>
             {{with formatImdbUrl $t.MediaMetadata}}
-            <li><a href="{{.}}">IMDB</a></li>
-            {{end}}
-        </ul>
-    </div>
-    {{end}}
+        </a>{{end}}
+
+        {{end}}
+    </main>
 
     <footer>Copyright &copy; 2024 <a href="https://derezz.com">derezz.com</a></footer>
 

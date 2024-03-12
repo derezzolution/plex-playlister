@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -19,6 +20,10 @@ import (
 
 	"github.com/derezzolution/go-plex-client"
 	"github.com/gorilla/mux"
+	"github.com/tdewolff/minify/v2"
+	"github.com/tdewolff/minify/v2/css"
+	"github.com/tdewolff/minify/v2/html"
+	"github.com/tdewolff/minify/v2/js"
 
 	"github.com/derezzolution/plex-playlister/config"
 )
@@ -85,6 +90,7 @@ func main() {
 }
 
 func newStaticHandler() func(http.ResponseWriter, *http.Request) {
+	m := newMinify()
 	return func(w http.ResponseWriter, r *http.Request) {
 		filename, _ := strings.CutPrefix(filepath.Clean(r.URL.Path), "/")
 
@@ -95,8 +101,13 @@ func newStaticHandler() func(http.ResponseWriter, *http.Request) {
 		}
 		defer file.Close()
 
-		w.Header().Set("Content-Type", mime.TypeByExtension(filepath.Ext(filename)))
-		io.Copy(w, file)
+		mediaType := mime.TypeByExtension(filepath.Ext(filename))
+		w.Header().Set("Content-Type", mediaType)
+
+		err = m.Minify(mediaType, w, file)
+		if err != nil {
+			io.Copy(w, file) // Return the regular file, if we can't minify
+		}
 	}
 }
 
@@ -109,13 +120,13 @@ func newPlaylistHandler(plexConnection *plex.Plex, plexRatingKey int) func(http.
 
 	license := readLicense()
 	playlistTemplate, err := template.New("playlist.html").Funcs(template.FuncMap{
-		// Given a playlist track, format the episode code (e.g. sXXeYY).
+		// Given a playlist track, format the episode code (e.g. SXX.EYY).
 		"formatEpisodeCode": func(metadata plex.Metadata) string {
 			if metadata.ParentIndex == 0 && metadata.Index == 0 {
-				return "" // Probably isn't s00e00
+				return "" // Probably isn't S0.E0
 			}
-			return fmt.Sprintf("s%0*de%0*d",
-				2, metadata.ParentIndex, 2, metadata.Index)
+			return fmt.Sprintf("S%0*d.E%0*d",
+				1, metadata.ParentIndex, 1, metadata.Index)
 		},
 
 		// Extracts the IMDB id and constructs an IMDB URL.
@@ -127,11 +138,17 @@ func newPlaylistHandler(plexConnection *plex.Plex, plexRatingKey int) func(http.
 			}
 			return "" // No IMDB ID
 		},
+
+		// Increment the given integer by one.
+		"increment": func(i int) int {
+			return i + 1
+		},
 	}).ParseFS(packageFS, "templates/playlist.html")
 	if err != nil {
 		log.Fatalf("error reading playlist template: %v", err)
 	}
 
+	m := newMinify()
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		playlist, err := plexConnection.GetPlaylist(plexRatingKey)
@@ -183,9 +200,17 @@ func newPlaylistHandler(plexConnection *plex.Plex, plexRatingKey int) func(http.
 			return
 		}
 
-		w.Header().Set("Content-Type", "text/html")
-		_, err = w.Write([]byte(fmt.Sprintf("<!--\n%s-->\n\n%s", license,
-			renderedPlaylist.String())))
+		mediaType := "text/html"
+		minifiedPage, err := m.String(mediaType, fmt.Sprintf("<!--\n%s-->\n\n%s", license,
+			renderedPlaylist.String()))
+		if err != nil {
+			log.Printf("could not minify page: %v", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", mediaType)
+		_, err = w.Write([]byte(minifiedPage))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -237,6 +262,7 @@ func newPlaylistThumbHandler(plexConnection *plex.Plex, plexRatingKey int) func(
 		}
 		defer resp.Body.Close()
 
+		w.Header().Set("Cache-Control", "max-age=3600") // Cache for an hour
 		io.Copy(w, resp.Body)
 	}
 }
@@ -248,4 +274,18 @@ func readLicense() string {
 		log.Fatalf("error reading license: %v", err)
 	}
 	return string(license)
+}
+
+// newMinify builds and configures a new minify.
+func newMinify() *minify.M {
+	m := minify.New()
+	m.AddFunc("text/css", css.Minify)
+	m.Add("text/html", &html.Minifier{
+		KeepComments:     true,
+		KeepDocumentTags: true,
+		KeepEndTags:      true,
+		KeepQuotes:       true,
+	})
+	m.AddFuncRegexp(regexp.MustCompile("^(application|text)/(x-)?(java|ecma)script$"), js.Minify)
+	return m
 }

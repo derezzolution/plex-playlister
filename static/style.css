@@ -1,8 +1,61 @@
-/* Copyright (c) 2024 derezz.com */
+/*! Copyright (c) 2024 derezz.com */
+
+* {
+    box-sizing: border-box;
+}
 
 html,
 body {
     margin: 0;
     padding: 0;
     font-family: sans-serif;
+}
+
+main,
+footer {
+    padding: 0 20px 20px 20px;
+}
+
+footer {
+    font-size: 10px;
+}
+
+h1 {
+    color: #000088;
+    border-bottom: 1px solid #dbdeff;
+}
+
+a {
+    text-decoration: none;
+    color: #000088;
+}
+
+.track {
+    border-radius: 10px;
+    padding: 10px;
+    margin: 0px 10px 20px 10px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    column-gap: 10px;
+}
+
+.track:hover {
+    padding: 9px;
+    background-color: #ebedff;
+    border: 1px solid rgb(218, 221, 255);
+    cursor: pointer;
+}
+
+.track img {
+    /* Set width to 10% and prevent flex-grow and flex-shrink */
+    flex: 0 0 10%;
+    max-width: 20%;
+    height: auto;
+}
+
+.track .title {
+    /* Take up remaining space */
+    flex-grow: 1;
 }
