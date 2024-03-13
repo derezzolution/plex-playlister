@@ -7,10 +7,14 @@ import (
 )
 
 type Config struct {
-	PlexServerUrl  string `json:"plexServerUrl"`
-	PlexToken      string `json:"plexToken"`
-	PlexRatingKeys []int  `json:"plexRatingKeys"` // Playlists to expose
-	HttpPort       int    `json:"port"`           // Http port
+	PlexServerUrl string                     `json:"plexServerUrl"`
+	PlexToken     string                     `json:"plexToken"`
+	Playlists     map[string]*PlaylistConfig `json:"playlists"`
+	HttpPort      int                        `json:"port"` // Http port
+}
+
+type PlaylistConfig struct {
+	PlexRatingKey int `json:"plexRatingKey"` // Playlists to expose
 }
 
 func NewConfig(packageFS *embed.FS) (*Config, error) {

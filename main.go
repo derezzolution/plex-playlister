@@ -48,10 +48,10 @@ func main() {
 
 	mux := mux.NewRouter()
 	mux.PathPrefix("/static").HandlerFunc(newStaticHandler())
-	for _, plexRatingKey := range config.PlexRatingKeys {
-		mux.HandleFunc(fmt.Sprintf("/playlist/%d", plexRatingKey), newPlaylistHandler(plexConnection, plexRatingKey))
-		mux.HandleFunc(fmt.Sprintf("/playlist/%d/{index:[0-9]+}/thumb", plexRatingKey),
-			newPlaylistThumbHandler(plexConnection, plexRatingKey))
+	for key := range config.Playlists {
+		mux.HandleFunc(fmt.Sprintf("/playlist/%s", key), newPlaylistHandler(config, plexConnection, key))
+		mux.HandleFunc(fmt.Sprintf("/playlist/%s/{index:[0-9]+}/thumb", key),
+			newPlaylistThumbHandler(config, plexConnection, key))
 	}
 
 	server := &http.Server{
@@ -111,7 +111,7 @@ func newStaticHandler() func(http.ResponseWriter, *http.Request) {
 	}
 }
 
-func newPlaylistHandler(plexConnection *plex.Plex, plexRatingKey int) func(http.ResponseWriter, *http.Request) {
+func newPlaylistHandler(config *config.Config, plexConnection *plex.Plex, key string) func(http.ResponseWriter, *http.Request) {
 
 	type Track struct {
 		Metadata      plex.Metadata // Metadata of tracks in the playlist
@@ -151,9 +151,9 @@ func newPlaylistHandler(plexConnection *plex.Plex, plexRatingKey int) func(http.
 	m := newMinify()
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		playlist, err := plexConnection.GetPlaylist(plexRatingKey)
+		playlist, err := plexConnection.GetPlaylist(config.Playlists[key].PlexRatingKey)
 		if err != nil {
-			log.Printf("could not find playlist %d", plexRatingKey)
+			log.Printf("could not find playlist %d", config.Playlists[key].PlexRatingKey)
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
@@ -183,12 +183,14 @@ func newPlaylistHandler(plexConnection *plex.Plex, plexRatingKey int) func(http.
 
 		var renderedPlaylist strings.Builder
 		err = playlistTemplate.Execute(&renderedPlaylist, struct {
+			Key       string  // Key according to the config.PlaylistConfig
 			RatingKey string  // RatingKey of the playlist
 			Size      int     // Number of tracks in the playlist
 			Duration  int64   // Duration of the whole playlist
 			Title     string  // Title of the playlist
 			Tracks    []Track // Track metadata
 		}{
+			Key:       key,
 			RatingKey: playlist.MediaContainer.RatingKey,
 			Size:      playlist.MediaContainer.Size,
 			Duration:  playlist.MediaContainer.Duration,
@@ -220,7 +222,7 @@ func newPlaylistHandler(plexConnection *plex.Plex, plexRatingKey int) func(http.
 
 // createPlaylistThumbHandler creates a handler to proxy the thumbnail image. Use the plex rating key to keep things a
 // touch obfuscated.
-func newPlaylistThumbHandler(plexConnection *plex.Plex, plexRatingKey int) func(http.ResponseWriter, *http.Request) {
+func newPlaylistThumbHandler(config *config.Config, plexConnection *plex.Plex, key string) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		// Parse the index from the URL.
@@ -233,9 +235,9 @@ func newPlaylistThumbHandler(plexConnection *plex.Plex, plexRatingKey int) func(
 
 		// TODO - We shouldn't fetch the WHOLE playlist again. Look for another API and/or implement tighter requests in
 		// the golang plex client library.
-		playlist, err := plexConnection.GetPlaylist(plexRatingKey)
+		playlist, err := plexConnection.GetPlaylist(config.Playlists[key].PlexRatingKey)
 		if err != nil {
-			log.Printf("could not find playlist %d", plexRatingKey)
+			log.Printf("could not find playlist %d", config.Playlists[key].PlexRatingKey)
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}

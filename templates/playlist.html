@@ -19,7 +19,7 @@
         {{with formatImdbUrl $t.MediaMetadata}}<a href="{{.}}" target="_blank">{{end}}
             <div class="track">
                 <div class="index">{{increment $i}}.</div>
-                <img src="{{$.RatingKey}}/{{$i}}/thumb" />
+                <img src="{{$.Key}}/{{$i}}/thumb" />
                 <div class="title">
                     {{with $t.Metadata.GrandparentTitle}}{{.}}{{end}}
                     {{if and $t.Metadata.GrandparentTitle (formatEpisodeCode $t.Metadata)}} - {{end}}
