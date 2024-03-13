@@ -262,7 +262,7 @@ func newPlaylistThumbHandler(plexConnection *plex.Plex, plexRatingKey int) func(
 		}
 		defer resp.Body.Close()
 
-		w.Header().Set("Cache-Control", "max-age=3600") // Cache for an hour
+		w.Header().Set("Cache-Control", "max-age=604800") // Cache for 1 week
 		io.Copy(w, resp.Body)
 	}
 }
