@@ -13,7 +13,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -26,6 +25,7 @@ import (
 	"github.com/tdewolff/minify/v2/js"
 
 	"github.com/derezzolution/plex-playlister/config"
+	"github.com/derezzolution/plex-playlister/keycache"
 )
 
 //go:embed templates config.json LICENSE
@@ -34,8 +34,13 @@ var packageFS embed.FS
 //go:embed static
 var staticPackageFS embed.FS
 
-func main() {
-	log.Printf("loading plex-playlister...\n\n%s\n", readLicense())
+type service struct {
+	Config         *config.Config
+	KeyCache       *keycache.KeyCache
+	PlexConnection *plex.Plex
+}
+
+func newService() *service {
 	config, err := config.NewConfig(&packageFS)
 	if err != nil {
 		log.Fatalf("error reading config: %v", err)
@@ -43,19 +48,29 @@ func main() {
 
 	plexConnection, err := plex.New(config.PlexServerUrl, config.PlexToken)
 	if err != nil {
-		log.Fatalf("error connecting to plex server: %v", err)
+		log.Fatalf("error creating new plex server connection: %v", err)
 	}
+
+	return &service{
+		Config:         config,
+		KeyCache:       keycache.NewKeyCache(),
+		PlexConnection: plexConnection,
+	}
+}
+
+func main() {
+	log.Printf("loading plex-playlister...\n\n%s\n", readLicense())
+	s := newService()
 
 	mux := mux.NewRouter()
 	mux.PathPrefix("/static").HandlerFunc(newStaticHandler())
-	for key := range config.Playlists {
-		mux.HandleFunc(fmt.Sprintf("/playlist/%s", key), newPlaylistHandler(config, plexConnection, key))
-		mux.HandleFunc(fmt.Sprintf("/playlist/%s/{index:[0-9]+}/thumb", key),
-			newPlaylistThumbHandler(config, plexConnection, key))
+	for key := range s.Config.Playlists {
+		mux.HandleFunc(fmt.Sprintf("/playlist/%s", key), newPlaylistHandler(s, key))
 	}
+	mux.HandleFunc("/playlist/thumb/{obfusKey:[0-9]+}", newPlaylistThumbHandler(s))
 
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", config.HttpPort),
+		Addr:    fmt.Sprintf(":%d", s.Config.HttpPort),
 		Handler: mux,
 	}
 
@@ -65,8 +80,8 @@ func main() {
 
 	// Start the server in a separate goroutine
 	go func() {
-		log.Printf("starting http service on *:%d", config.HttpPort)
-		err = server.ListenAndServe()
+		log.Printf("starting http service on *:%d", s.Config.HttpPort)
+		err := server.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
 			log.Fatalf("fatal server error: %v", err)
 		}
@@ -80,7 +95,7 @@ func main() {
 	defer cancel()
 
 	// Shut down the server
-	err = server.Shutdown(ctx)
+	err := server.Shutdown(ctx)
 	if err != nil {
 		log.Fatalf("fatal server shutdown error: %v", err)
 	}
@@ -111,11 +126,12 @@ func newStaticHandler() func(http.ResponseWriter, *http.Request) {
 	}
 }
 
-func newPlaylistHandler(config *config.Config, plexConnection *plex.Plex, key string) func(http.ResponseWriter, *http.Request) {
+func newPlaylistHandler(s *service, key string) func(http.ResponseWriter, *http.Request) {
 
 	type Track struct {
-		Metadata      plex.Metadata // Metadata of tracks in the playlist
-		MediaMetadata plex.Metadata // Media Metadata of tracks in playlist (e.g. IMDB id etc)
+		ObfuscatedThumbKey string        // String mapping to obfuscated thumb key
+		Metadata           plex.Metadata // Metadata of tracks in the playlist
+		MediaMetadata      plex.Metadata // Media Metadata of tracks in playlist (e.g. IMDB id etc)
 	}
 
 	license := readLicense()
@@ -151,9 +167,9 @@ func newPlaylistHandler(config *config.Config, plexConnection *plex.Plex, key st
 	m := newMinify()
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		playlist, err := plexConnection.GetPlaylist(config.Playlists[key].PlexRatingKey)
+		playlist, err := s.PlexConnection.GetPlaylist(s.Config.Playlists[key].PlexRatingKey)
 		if err != nil {
-			log.Printf("could not find playlist %d", config.Playlists[key].PlexRatingKey)
+			log.Printf("could not find playlist %d", s.Config.Playlists[key].PlexRatingKey)
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
@@ -165,7 +181,7 @@ func newPlaylistHandler(config *config.Config, plexConnection *plex.Plex, key st
 		for _, metadata := range playlist.MediaContainer.Metadata {
 			playlistTrackRatingKeys = append(playlistTrackRatingKeys, metadata.RatingKey)
 		}
-		metadata, err := plexConnection.GetMetadata(strings.Join(playlistTrackRatingKeys, ","))
+		metadata, err := s.PlexConnection.GetMetadata(strings.Join(playlistTrackRatingKeys, ","))
 		if err != nil {
 			log.Printf("could not find metadata for rating keys %v: %v", playlistTrackRatingKeys, err)
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -176,8 +192,9 @@ func newPlaylistHandler(config *config.Config, plexConnection *plex.Plex, key st
 		trackMetadata := []Track{}
 		for idx, m := range playlist.MediaContainer.Metadata {
 			trackMetadata = append(trackMetadata, Track{
-				Metadata:      m,
-				MediaMetadata: metadata.MediaContainer.Metadata[idx],
+				ObfuscatedThumbKey: s.KeyCache.GetObfusKey(m.Thumb),
+				Metadata:           m,
+				MediaMetadata:      metadata.MediaContainer.Metadata[idx],
 			})
 		}
 
@@ -220,51 +237,35 @@ func newPlaylistHandler(config *config.Config, plexConnection *plex.Plex, key st
 	}
 }
 
-// createPlaylistThumbHandler creates a handler to proxy the thumbnail image. Use the plex rating key to keep things a
-// touch obfuscated.
-func newPlaylistThumbHandler(config *config.Config, plexConnection *plex.Plex, key string) func(http.ResponseWriter, *http.Request) {
+// createPlaylistThumbHandler creates a handler to proxy the thumbnail image.
+func newPlaylistThumbHandler(s *service) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		// Parse the index from the URL.
+		// Grab the key from the key cache (e.g. obfusKey := /library/metadata/10122/thumb/1705219286).
 		vars := mux.Vars(r)
-		index, err := strconv.Atoi(vars["index"])
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		// TODO - We shouldn't fetch the WHOLE playlist again. Look for another API and/or implement tighter requests in
-		// the golang plex client library.
-		playlist, err := plexConnection.GetPlaylist(config.Playlists[key].PlexRatingKey)
-		if err != nil {
-			log.Printf("could not find playlist %d", config.Playlists[key].PlexRatingKey)
-			http.Error(w, err.Error(), http.StatusNotFound)
-			return
-		}
-
-		// Make sure we have a thumbnail URL.
-		if index >= len(playlist.MediaContainer.Metadata) || len(playlist.MediaContainer.Metadata[index].Thumb) < 1 {
+		thumbChunks := strings.Split(strings.TrimPrefix(s.KeyCache.GetKey(vars["obfusKey"]), "/"), "/")
+		if len(thumbChunks) != 5 {
 			http.Error(w, "Track Not Found", http.StatusNotFound)
 			return
 		}
+		key := thumbChunks[2]     // e.g. 10122
+		thumbID := thumbChunks[4] // e.g. 1705219286
 
-		// Would be nice if plexConnection.GetThumbnail used .Thumb but it seems we need to reconstruct this. Fetch the
-		// thumbnail.
-		resp, err := plexConnection.GetThumbnail(playlist.MediaContainer.Metadata[index].RatingKey,
-			strconv.Itoa(playlist.MediaContainer.Metadata[index].UpdatedAt)) //http.Response, error
+		// Grab the thumbnail
+		resp, err := s.PlexConnection.GetThumbnail(key, thumbID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		if resp.StatusCode != http.StatusOK {
-			log.Printf("could not fetch thumbnail %s (statusCode=%d, status=%s, thumb=%s): ", r.URL.Path,
-				resp.StatusCode, resp.Status, playlist.MediaContainer.Metadata[index].Thumb)
+			log.Printf("could not fetch thumbnail %s (statusCode=%d, status=%s, key=%s, thumbID=%s): ", r.URL.Path,
+				resp.StatusCode, resp.Status, key, thumbID)
 			http.Error(w, "Track Not Found", http.StatusNotFound)
 			return
 		}
 		defer resp.Body.Close()
 
-		w.Header().Set("Cache-Control", "max-age=604800") // Cache for 1 week
+		w.Header().Set("Cache-Control", "max-age=2629800") // Cache for 1 month
 		io.Copy(w, resp.Body)
 	}
 }
