@@ -12,6 +12,11 @@ Golang service to expose a Plex Playlist using the Plex API.
 
 ## Usage
 
+> [!IMPORTANT]
+> Please remember to set the `keyCacheSalt` field in the config. Without this, a default **random** salt will be used
+> and the checkbox state will not be accurately persisteded in local storage. Every service restart will result in a new
+> salt and, thus, a new checkbox ID.
+
 1. Copy `config.json.template` to `config.json` and populate with your specifics
 
 1. Run with `go run .`

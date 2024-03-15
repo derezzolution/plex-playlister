@@ -18,7 +18,10 @@
 
         {{with formatImdbUrl $t.MediaMetadata}}<a href="{{.}}" target="_blank">{{end}}
             <div class="item{{with formatImdbUrl $t.MediaMetadata}} clickable{{end}}">
-                <div class="index">{{increment $i}}.</div>
+                <div class="index">
+                    {{increment $i}}.
+                    <input type="checkbox" data-key="{{$t.ObfuscatedKey}}" />
+                </div>
                 <img src="thumb/{{.ObfuscatedThumbKey}}" />
                 <div class="title">
                     {{with $t.Metadata.GrandparentTitle}}{{.}}{{end}}
@@ -35,6 +38,29 @@
     </main>
 
     <footer>Copyright &copy; 2024 <a href="https://derezz.com">derezz.com</a></footer>
+
+    <script>
+
+        // Look through local storage to initialize checkboxes
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            const checkboxEl = document.querySelector(`main input[type="checkbox"][data-key="${key}"]`);
+            if (checkboxEl) {
+                checkboxEl.checked = localStorage.getItem(key) === 'true';
+            }
+        }
+
+        // Add click handler to maintain checkbox state
+        const mainEl = document.querySelector('main');
+        mainEl.addEventListener('click', (event) => {
+            if (!event.target.matches('input[type="checkbox"]')) {
+                return;
+            }
+
+            const checkboxEl = event.target;
+            localStorage.setItem(checkboxEl.getAttribute('data-key'), checkboxEl.checked ? 'true' : 'false');
+        });
+    </script>
 
 </body>
 

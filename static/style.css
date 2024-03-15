@@ -48,6 +48,13 @@ a {
     cursor: pointer;
 }
 
+.item input[type="checkbox"] {
+    width: 32px;
+    height: 32px;
+    vertical-align: middle;
+    margin: -2px 20px 0 20px;
+}
+
 .item img {
     /* Set width to 10% and prevent flex-grow and flex-shrink */
     flex: 0 0 10%;

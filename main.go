@@ -213,6 +213,7 @@ func newIndexHandler(s *service) func(http.ResponseWriter, *http.Request) {
 func newPlaylistHandler(s *service, key string) func(http.ResponseWriter, *http.Request) {
 
 	type Track struct {
+		ObfuscatedKey      string        // String mapping to obfuscated track key
 		ObfuscatedThumbKey string        // String mapping to obfuscated thumb key
 		Metadata           plex.Metadata // Metadata of tracks in the playlist
 		MediaMetadata      plex.Metadata // Media Metadata of tracks in playlist (e.g. IMDB id etc)
@@ -253,6 +254,7 @@ func newPlaylistHandler(s *service, key string) func(http.ResponseWriter, *http.
 		trackMetadata := []Track{}
 		for idx, m := range playlist.MediaContainer.Metadata {
 			trackMetadata = append(trackMetadata, Track{
+				ObfuscatedKey:      s.KeyCache.GetObfusKey(m.Key),
 				ObfuscatedThumbKey: s.KeyCache.GetObfusKey(m.Thumb),
 				Metadata:           m,
 				MediaMetadata:      metadata.MediaContainer.Metadata[idx],

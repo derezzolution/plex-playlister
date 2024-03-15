@@ -4,5 +4,6 @@
     "playlists": {
         "my-favorite-movies": { "plexRatingKey": 1001, "visibleOnIndex": true }
     },
+    "keyCacheSalt": "GENERATE_SOME_RANDOM_STRING_FOR_THIS_FIELD"
     "port": 8080
 }
