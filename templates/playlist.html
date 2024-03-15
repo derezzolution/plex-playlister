@@ -17,7 +17,7 @@
         {{range $i, $t := .Tracks}}
 
         {{with formatImdbUrl $t.MediaMetadata}}<a href="{{.}}" target="_blank">{{end}}
-            <div class="track">
+            <div class="item{{with formatImdbUrl $t.MediaMetadata}} clickable{{end}}">
                 <div class="index">{{increment $i}}.</div>
                 <img src="thumb/{{.ObfuscatedThumbKey}}" />
                 <div class="title">

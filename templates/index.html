@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+    <title>Playlists</title>
+
+    <link rel="stylesheet" href="static/style.css" />
+</head>
+
+<body>
+    <main>
+        <h1>Playlists</h1>
+
+        {{range $i, $p := .Playlists}}
+        {{ if $p.PlaylistConfig.VisibleOnIndex }}
+
+        <a href="playlist/{{$p.PlaylistKey}}">
+            <div class="item clickable">
+                <div class="index">{{increment $i}}.</div>
+                <div class="title">{{$p.MediaContainer.Title}}</div>
+            </div>
+        </a>
+
+        {{ end }}
+        {{end}}
+
+    </main>
+
+    <footer>Copyright &copy; 2024 <a href="https://derezz.com">derezz.com</a></footer>
+
+</body>
+
+</html>

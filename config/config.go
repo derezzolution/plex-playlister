@@ -10,11 +10,13 @@ type Config struct {
 	PlexServerUrl string                     `json:"plexServerUrl"`
 	PlexToken     string                     `json:"plexToken"`
 	Playlists     map[string]*PlaylistConfig `json:"playlists"`
+	KeyCacheSalt  string                     `json:"keyCacheSalt"`
 	HttpPort      int                        `json:"port"` // Http port
 }
 
 type PlaylistConfig struct {
-	PlexRatingKey int `json:"plexRatingKey"` // Playlists to expose
+	PlexRatingKey  int  `json:"plexRatingKey"`  // Playlists to expose
+	VisibleOnIndex bool `json:"visibleOnIndex"` // Whether the playlist should be visible on the index page
 }
 
 func NewConfig(packageFS *embed.FS) (*Config, error) {

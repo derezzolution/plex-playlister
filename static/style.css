@@ -30,7 +30,7 @@ a {
     color: #000088;
 }
 
-.track {
+.item {
     border-radius: 10px;
     padding: 10px;
     margin: 0px 10px 20px 10px;
@@ -41,21 +41,21 @@ a {
     column-gap: 10px;
 }
 
-.track:hover {
+.item.clickable:hover {
     padding: 9px;
     background-color: #ebedff;
     border: 1px solid rgb(218, 221, 255);
     cursor: pointer;
 }
 
-.track img {
+.item img {
     /* Set width to 10% and prevent flex-grow and flex-shrink */
     flex: 0 0 10%;
     max-width: 20%;
     height: auto;
 }
 
-.track .title {
+.item .title {
     /* Take up remaining space */
     flex-grow: 1;
 }

@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -53,7 +54,7 @@ func newService() *service {
 
 	return &service{
 		Config:         config,
-		KeyCache:       keycache.NewKeyCache(),
+		KeyCache:       keycache.NewKeyCache(config.KeyCacheSalt),
 		PlexConnection: plexConnection,
 	}
 }
@@ -63,6 +64,7 @@ func main() {
 	s := newService()
 
 	mux := mux.NewRouter()
+	mux.HandleFunc("/", newIndexHandler(s))
 	mux.PathPrefix("/static").HandlerFunc(newStaticHandler())
 	for key := range s.Config.Playlists {
 		mux.HandleFunc(fmt.Sprintf("/playlist/%s", key), newPlaylistHandler(s, key))
@@ -126,16 +128,9 @@ func newStaticHandler() func(http.ResponseWriter, *http.Request) {
 	}
 }
 
-func newPlaylistHandler(s *service, key string) func(http.ResponseWriter, *http.Request) {
-
-	type Track struct {
-		ObfuscatedThumbKey string        // String mapping to obfuscated thumb key
-		Metadata           plex.Metadata // Metadata of tracks in the playlist
-		MediaMetadata      plex.Metadata // Media Metadata of tracks in playlist (e.g. IMDB id etc)
-	}
-
-	license := readLicense()
-	playlistTemplate, err := template.New("playlist.html").Funcs(template.FuncMap{
+// templateFuncMap lists function helpers for template generation.
+func templateFuncMap() template.FuncMap {
+	return template.FuncMap{
 		// Given a playlist track, format the episode code (e.g. SXX.EYY).
 		"formatEpisodeCode": func(metadata plex.Metadata) string {
 			if metadata.ParentIndex == 0 && metadata.Index == 0 {
@@ -159,7 +154,73 @@ func newPlaylistHandler(s *service, key string) func(http.ResponseWriter, *http.
 		"increment": func(i int) int {
 			return i + 1
 		},
-	}).ParseFS(packageFS, "templates/playlist.html")
+	}
+}
+
+// newIndexHandler creates a handler for a playlist index page.
+func newIndexHandler(s *service) func(http.ResponseWriter, *http.Request) {
+	license := readLicense()
+
+	playlistTemplate, err := template.New("index.html").Funcs(templateFuncMap()).
+		ParseFS(packageFS, "templates/index.html")
+	if err != nil {
+		log.Fatalf("error reading playlist template: %v", err)
+	}
+
+	m := newMinify()
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		type Playlist struct {
+			PlaylistKey    string
+			PlaylistConfig *config.PlaylistConfig
+			MediaContainer plex.MediaContainer
+		}
+
+		// TODO - Parallelize (should fetch in chunks of 5 for a fatter pipe)
+		playlists := []Playlist{}
+		for playlistKey, playlistConfig := range s.Config.Playlists {
+			playlist, err := s.PlexConnection.GetPlaylist(playlistConfig.PlexRatingKey)
+			if err != nil {
+				log.Printf("could not find playlist %d", playlistConfig.PlexRatingKey)
+				http.Error(w, err.Error(), http.StatusNotFound)
+				return
+			}
+			playlists = append(playlists, Playlist{
+				PlaylistKey:    playlistKey,
+				PlaylistConfig: playlistConfig,
+				MediaContainer: playlist.MediaContainer,
+			})
+		}
+		sort.Slice(playlists, func(i, j int) bool {
+			return playlists[i].PlaylistKey < playlists[j].PlaylistKey
+		})
+
+		content := strings.Builder{}
+		err = playlistTemplate.Execute(&content, struct {
+			Playlists []Playlist
+		}{
+			Playlists: playlists,
+		})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		renderHtml(license, m, content, w)
+	}
+}
+
+func newPlaylistHandler(s *service, key string) func(http.ResponseWriter, *http.Request) {
+
+	type Track struct {
+		ObfuscatedThumbKey string        // String mapping to obfuscated thumb key
+		Metadata           plex.Metadata // Metadata of tracks in the playlist
+		MediaMetadata      plex.Metadata // Media Metadata of tracks in playlist (e.g. IMDB id etc)
+	}
+
+	license := readLicense()
+	playlistTemplate, err := template.New("playlist.html").Funcs(templateFuncMap()).
+		ParseFS(packageFS, "templates/playlist.html")
 	if err != nil {
 		log.Fatalf("error reading playlist template: %v", err)
 	}
@@ -175,7 +236,7 @@ func newPlaylistHandler(s *service, key string) func(http.ResponseWriter, *http.
 		}
 
 		// One request for all items in the playlist, should we paginate this? Of course we should. Generally, though,
-		// this whole endpoint should be cache on all fronts. Highly suggest putting this behind Cloudflare and caching
+		// this whole endpoint should be cached on all fronts. Highly suggest putting this behind Cloudflare and caching
 		// for hours+.
 		playlistTrackRatingKeys := []string{}
 		for _, metadata := range playlist.MediaContainer.Metadata {
@@ -198,8 +259,8 @@ func newPlaylistHandler(s *service, key string) func(http.ResponseWriter, *http.
 			})
 		}
 
-		var renderedPlaylist strings.Builder
-		err = playlistTemplate.Execute(&renderedPlaylist, struct {
+		content := strings.Builder{}
+		err = playlistTemplate.Execute(&content, struct {
 			Key       string  // Key according to the config.PlaylistConfig
 			RatingKey string  // RatingKey of the playlist
 			Size      int     // Number of tracks in the playlist
@@ -219,21 +280,7 @@ func newPlaylistHandler(s *service, key string) func(http.ResponseWriter, *http.
 			return
 		}
 
-		mediaType := "text/html"
-		minifiedPage, err := m.String(mediaType, fmt.Sprintf("<!--\n%s-->\n\n%s", license,
-			renderedPlaylist.String()))
-		if err != nil {
-			log.Printf("could not minify page: %v", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", mediaType)
-		_, err = w.Write([]byte(minifiedPage))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		renderHtml(license, m, content, w)
 	}
 }
 
@@ -291,4 +338,24 @@ func newMinify() *minify.M {
 	})
 	m.AddFuncRegexp(regexp.MustCompile("^(application|text)/(x-)?(java|ecma)script$"), js.Minify)
 	return m
+}
+
+// renderHtml renders the html content by injecting the license and minifying the response before writing it to the http
+// response writer.
+func renderHtml(license string, m *minify.M, content strings.Builder, w http.ResponseWriter) {
+	mediaType := "text/html"
+	minifiedPage, err := m.String(mediaType, fmt.Sprintf("<!--\n%s-->\n\n%s", license,
+		content.String()))
+	if err != nil {
+		log.Printf("could not minify page: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", mediaType)
+	_, err = w.Write([]byte(minifiedPage))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }

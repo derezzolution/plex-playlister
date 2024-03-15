@@ -2,7 +2,7 @@
     "plexServerUrl": "http://localhost:32400",
     "plexToken": "YourTokenGoesHere",
     "playlists": {
-        "my-favorite-movies": { "plexRatingKey": 1001 }
+        "my-favorite-movies": { "plexRatingKey": 1001, "visibleOnIndex": true }
     },
     "port": 8080
 }
