@@ -1,9 +1,9 @@
 package config
 
 import (
-	"embed"
 	"encoding/json"
 	"fmt"
+	"os"
 )
 
 type Config struct {
@@ -19,16 +19,16 @@ type PlaylistConfig struct {
 	VisibleOnIndex bool `json:"visibleOnIndex"` // Whether the playlist should be visible on the index page
 }
 
-func NewConfig(packageFS *embed.FS) (*Config, error) {
-	configContent, err := packageFS.ReadFile("config.json")
+func NewConfig() (*Config, error) {
+	configContent, err := os.ReadFile("config.json")
 	if err != nil {
-		return nil, fmt.Errorf("error reading embedded config: %s", err)
+		return nil, err
 	}
 
 	config := &Config{}
 	err = json.Unmarshal(configContent, &config)
 	if err != nil {
-		return nil, fmt.Errorf("error unmarshalling embedded config: %s", err)
+		return nil, fmt.Errorf("error unmarshalling config: %s", err)
 	}
 
 	return config, nil

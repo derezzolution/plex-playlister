@@ -15,11 +15,12 @@
 </head>
 
 <body>
+
     <main>
         <h1>Playlists</h1>
 
         {{range $i, $p := .Playlists}}
-        {{ if $p.PlaylistConfig.VisibleOnIndex }}
+        {{if $p.PlaylistConfig.VisibleOnIndex}}
 
         <a href="playlist/{{$p.PlaylistKey}}">
             <div class="item">
@@ -28,7 +29,7 @@
             </div>
         </a>
 
-        {{ end }}
+        {{end}}
         {{end}}
 
     </main>
