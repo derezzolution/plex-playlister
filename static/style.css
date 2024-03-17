@@ -8,7 +8,9 @@ html,
 body {
     margin: 0;
     padding: 0;
-    font-family: sans-serif;
+    font-family: "Roboto", sans-serif;
+    font-weight: 400;
+    font-style: normal;
 }
 
 main,
@@ -23,6 +25,10 @@ footer {
 h1 {
     color: #000088;
     border-bottom: 1px solid #dbdeff;
+    font-family: "Oswald", sans-serif;
+    font-optical-sizing: auto;
+    font-weight: 400;
+    font-style: normal;
 }
 
 a {
@@ -31,7 +37,7 @@ a {
 }
 
 .item {
-    border-radius: 10px;
+    border-radius: 5px;
     padding: 10px;
     margin: 0px 10px 20px 10px;
     position: relative;
@@ -41,18 +47,19 @@ a {
     column-gap: 10px;
 }
 
-.item.clickable:hover {
+.item:hover {
     padding: 9px;
-    background-color: #ebedff;
-    border: 1px solid rgb(218, 221, 255);
+    background-color: #fcfcff;
+    border: 1px solid #daddff;
     cursor: pointer;
 }
 
-.item input[type="checkbox"] {
-    width: 32px;
-    height: 32px;
-    vertical-align: middle;
-    margin: -2px 20px 0 20px;
+.item .checkmark {
+    font-size: 36px;
+    margin: 0 14px;
+    color: #000088;
+    visibility: hidden;
+    pointer-events: none;
 }
 
 .item img {
@@ -65,4 +72,13 @@ a {
 .item .title {
     /* Take up remaining space */
     flex-grow: 1;
+    margin-bottom: 3px;
+}
+
+.item.checked .checkmark {
+    visibility: visible;
+}
+
+.item.checked .title {
+    text-decoration: line-through;
 }

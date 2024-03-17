@@ -21,6 +21,12 @@ Golang service to expose a Plex Playlist using the Plex API.
 
 1. Run with `go run .`
 
+## Build
+
+1. Build with `./scripts/build.sh`
+
+2. Copy `plex-playlister` to your server and wrap in a service script (e.g. systemd)
+
 ## Screenshot
 
 > [!IMPORTANT]

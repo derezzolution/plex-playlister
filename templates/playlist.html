@@ -6,7 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 
     <title>{{.Title}}</title>
-
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=B612:ital,wght@0,400;0,700;1,400;1,700&family=Oswald&family=Roboto:wght@400;700&display=swap" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css" />
     <link rel="stylesheet" href="../static/style.css" />
 </head>
 
@@ -16,23 +20,23 @@
 
         {{range $i, $t := .Tracks}}
 
-        {{with formatImdbUrl $t.MediaMetadata}}<a href="{{.}}" target="_blank">{{end}}
-            <div class="item{{with formatImdbUrl $t.MediaMetadata}} clickable{{end}}">
-                <div class="index">
-                    {{increment $i}}.
-                    <input type="checkbox" data-key="{{$t.ObfuscatedKey}}" />
-                </div>
-                <img src="thumb/{{.ObfuscatedThumbKey}}" />
-                <div class="title">
+        <div class="item" data-key="{{$t.ObfuscatedKey}}">
+            <div class="index">{{increment $i}}.</div>
+            <span class="checkmark mdi mdi-check-bold"></span>
+            <img src="thumb/{{.ObfuscatedThumbKey}}" />
+            <div class="title">
+                {{with formatImdbUrl $t.MediaMetadata}}<a href="{{.}}" onclick="event.stopPropagation();"
+                    target="_blank">{{end}}
+
                     {{with $t.Metadata.GrandparentTitle}}{{.}}{{end}}
                     {{if and $t.Metadata.GrandparentTitle (formatEpisodeCode $t.Metadata)}} - {{end}}
                     {{with formatEpisodeCode $t.Metadata}}{{.}}{{end}}
                     {{if and (formatEpisodeCode $t.Metadata) $t.Metadata.Title}} - {{end}}
                     {{with $t.Metadata.Title}}{{.}}{{end}}
-                </div>
+
+                    {{with formatImdbUrl $t.MediaMetadata}}</a>{{end}}
             </div>
-            {{with formatImdbUrl $t.MediaMetadata}}
-        </a>{{end}}
+        </div>
 
         {{end}}
     </main>
@@ -41,24 +45,27 @@
 
     <script>
 
-        // Look through local storage to initialize checkboxes
+        // Look through local storage to initialize checked state
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
-            const checkboxEl = document.querySelector(`main input[type="checkbox"][data-key="${key}"]`);
-            if (checkboxEl) {
-                checkboxEl.checked = localStorage.getItem(key) === 'true';
+            const itemEl = document.querySelector(`main .item[data-key="${key}"]`);
+            if (itemEl) {
+                itemEl.classList.toggle('checked', !!localStorage.getItem(key));
             }
         }
 
-        // Add click handler to maintain checkbox state
+        // Add click handler to maintain the checked state
         const mainEl = document.querySelector('main');
         mainEl.addEventListener('click', (event) => {
-            if (!event.target.matches('input[type="checkbox"]')) {
-                return;
+            if (event.target.matches('.item')) {
+                const itemEl = event.target;
+                itemEl.classList.toggle('checked');
+                if (itemEl.classList.contains('checked')) {
+                    localStorage.setItem(itemEl.getAttribute('data-key'), Date.now());
+                } else {
+                    localStorage.removeItem(itemEl.getAttribute('data-key'));
+                }
             }
-
-            const checkboxEl = event.target;
-            localStorage.setItem(checkboxEl.getAttribute('data-key'), checkboxEl.checked ? 'true' : 'false');
         });
     </script>
 

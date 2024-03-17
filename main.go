@@ -27,6 +27,7 @@ import (
 
 	"github.com/derezzolution/plex-playlister/config"
 	"github.com/derezzolution/plex-playlister/keycache"
+	"github.com/derezzolution/plex-playlister/version"
 )
 
 //go:embed templates config.json LICENSE
@@ -36,6 +37,7 @@ var packageFS embed.FS
 var staticPackageFS embed.FS
 
 type service struct {
+	Version        *version.Version
 	Config         *config.Config
 	KeyCache       *keycache.KeyCache
 	PlexConnection *plex.Plex
@@ -53,6 +55,7 @@ func newService() *service {
 	}
 
 	return &service{
+		Version:        version.NewVersion(),
 		Config:         config,
 		KeyCache:       keycache.NewKeyCache(config.KeyCacheSalt),
 		PlexConnection: plexConnection,
@@ -60,8 +63,9 @@ func newService() *service {
 }
 
 func main() {
-	log.Printf("loading plex-playlister...\n\n%s\n", readLicense())
 	s := newService()
+	s.Version.LogSummary()
+	log.Printf("loading plex-playlister...\n\n%s\n", readLicense())
 
 	mux := mux.NewRouter()
 	mux.HandleFunc("/", newIndexHandler(s))
